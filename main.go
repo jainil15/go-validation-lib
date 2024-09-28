@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 )
 
 // TODO: checkDate
-type Validator[T int | float64 | string] struct {
+type Validator[T any] struct {
 	value       T
 	checkString bool
 	checkEmail  bool
@@ -24,10 +25,10 @@ func (v *Validator[T]) Validate() []string {
 		errs = append(errs, "Not a string")
 	}
 	if v.checkMin && !v.CheckMin() {
-		errs = append(errs, "Greater than min")
+		errs = append(errs, fmt.Sprintf("Lower than min %v", *v.min))
 	}
 	if v.checkMax && !v.CheckMax() {
-		errs = append(errs, "Greater than max")
+		errs = append(errs, fmt.Sprintf("Greater than max %v", *v.max))
 	}
 	if v.checkEmail && !v.CheckEmail() {
 		errs = append(errs, "Not an Email")
@@ -38,9 +39,9 @@ func (v *Validator[T]) Validate() []string {
 	return errs
 }
 
-type Validatable[T int | float64 | string] map[string]Validator[T]
+type Validatable[T any] map[string]Validator[T]
 
-func NewValidator[T int | float64 | string](
+func NewValidator[T any](
 	value T,
 	checkString, checkEmail, checkMin, checkMax bool,
 ) Validator[T] {
@@ -54,9 +55,12 @@ func NewValidator[T int | float64 | string](
 }
 
 func (v *Validator[T]) CheckString() bool {
-	if _, ok := any(v.value).(string); ok {
+	if reflect.TypeOf(v.value) == reflect.TypeOf("") {
 		return true
 	}
+	// if _, ok := any(v.value).(string); ok {
+	// 	return true
+	// }
 	return false
 }
 
@@ -70,17 +74,21 @@ func (v *Validator[T]) CheckEmail() bool {
 
 func (v *Validator[T]) CheckMin() bool {
 	if v.min != nil {
-		if v.value < any(*v.min).(T) {
-			return false
+		if str, ok := any(v.value).(string); ok {
+			if len(str) < *v.min {
+				return false
+			}
 		}
 	}
 	return true
 }
 
 func (v *Validator[T]) CheckMax() bool {
-	if v.max != nil {
-		if v.value > any(*v.max).(T) {
-			return false
+	if v.min != nil {
+		if str, ok := any(v.value).(string); ok {
+			if len(str) > *v.max {
+				return false
+			}
 		}
 	}
 	return true
@@ -107,9 +115,33 @@ func (validatable *Validatable[T]) Parse(v any) (map[string][]string, error) {
 		if !ok {
 			return nil, errors.New(fmt.Sprintf("%v not found", k))
 		}
-		errMap[k] = validator.Validate()
+		if errs := validator.Validate(); errs != nil {
+			errMap[k] = errs
+		}
 	}
 	return errMap, nil
+}
+
+func (v Validator[T]) Email() Validator[T] {
+	v.checkEmail = true
+	return v
+}
+
+func (v Validator[T]) Min(min int) Validator[T] {
+	v.checkMin = true
+	v.min = &min
+	return v
+}
+
+func (v Validator[T]) Max(max int) Validator[T] {
+	v.checkMax = true
+	v.max = &max
+	return v
+}
+
+func (v Validator[T]) String() Validator[T] {
+	v.checkString = true
+	return v
 }
 
 type User struct {
@@ -118,19 +150,27 @@ type User struct {
 	Age   int    `json:"age"`
 }
 
+func New[T int | string](value T) Validator[any] {
+	return Validator[any]{
+		value: value,
+	}
+}
+
 func main() {
 	user := User{
-		Email: "jainil",
+		Email: "jainil@gmail.com",
 		Name:  "jainil",
 		Age:   12,
 	}
-	v := Validatable[string]{
-		"email": NewValidator(user.Name, false, true, false, false),
-		"name":  NewValidator(user.Email, true, true, false, false),
+
+	v := Validatable[any]{
+		"email": New(user.Email).String().Min(503),
+		"name":  New(user.Name).String(),
+		"age":   New(user.Age).String().Min(503),
 	}
 	b, err := v.Parse(user)
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(b)
+	fmt.Printf("%v\n", b)
 }
