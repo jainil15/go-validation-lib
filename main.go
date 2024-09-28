@@ -43,8 +43,8 @@ type Validatable[T int | float64 | string] map[string]Validator[T]
 func NewValidator[T int | float64 | string](
 	value T,
 	checkString, checkEmail, checkMin, checkMax bool,
-) *Validator[T] {
-	return &Validator[T]{
+) Validator[T] {
+	return Validator[T]{
 		value:       value,
 		checkEmail:  checkEmail,
 		checkString: checkString,
@@ -125,8 +125,8 @@ func main() {
 		Age:   12,
 	}
 	v := Validatable[string]{
-		"email": *NewValidator(user.Name, false, true, false, false),
-		"name":  *NewValidator(user.Email, true, true, false, false),
+		"email": NewValidator(user.Name, false, true, false, false),
+		"name":  NewValidator(user.Email, true, true, false, false),
 	}
 	b, err := v.Parse(user)
 	if err != nil {
